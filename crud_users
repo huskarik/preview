@@ -1,0 +1,54 @@
+from typing import Sequence
+
+from uuid import UUID
+
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
+
+from core.models import User
+from core.schemas.user import UserCreate
+
+
+async def get_all_users(session: AsyncSession) -> Sequence[User]:
+    stmt = select(User).order_by(User.id.desc())
+    result = await session.scalars(stmt)
+    return result.all()
+
+
+async def create_user(session: AsyncSession, user_create: UserCreate) -> User:
+    user = User(**user_create.model_dump())
+    session.add(user)
+    await session.commit()
+    #await session.refresh()
+    return user
+
+
+async def get_user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
+    query = select(User).options(selectinload(User.settings)).where(User.userid == user_id)
+    user = await session.scalar(query)
+    return user
+
+
+async def update_user_keyMS(session: AsyncSession, user: User, keyMS: bytes) -> None:
+    try:
+        user.keyMS = keyMS
+        session.add(user)
+        await session.commit()
+
+    except Exception:
+        await session.rollback()
+        raise
+
+
+
+async def update_user_vendor_state(session: AsyncSession, user: User, state: str) -> User | None:
+    try:
+        user.state = state
+        session.add(user)
+        await session.commit()
+        return user
+    except Exception:
+        await session.rollback()
+        raise
